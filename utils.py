@@ -20,6 +20,7 @@ NUMERIC_FEATURES = ["userRating", "opponentRating", "rating_diff", "games_played
 CATEGORICAL_FEATURES = ["timeClass","userColor","opponent_strength_bucket","weekday","hour_bucket_et","opening_family"]
 TIME_CONTROLS = ("blitz", "rapid", "bullet")
 DRAW_RESULTS = {"agreed", "stalemate", "insufficient", "repetition", "timevsinsufficient"}
+TIMECLASS_COLOR = {"bullet": "red", "blitz": "blue", "rapid": "green"}
 DEFAULT_OPENING_MIN_GAMES = 8
 DEFAULT_RANDOM_STATE = 16
 
@@ -179,6 +180,7 @@ def plot_rating_progression(games):
         data=rating_by_day,
         x="date",
         y="rolling_rating",
+        palette=TIMECLASS_COLOR,
         hue="timeClass",
         linewidth=2,
         ax=ax,
@@ -192,6 +194,7 @@ def plot_rating_progression(games):
     plt.tight_layout()
 
     return ax
+    
 
 def plot_games_per_week(games):
     games_per_week = (
@@ -205,6 +208,7 @@ def plot_games_per_week(games):
         data=games_per_week,
         x="week_start",
         y="games_played",
+        palette=TIMECLASS_COLOR,
         hue="timeClass",
         linewidth=2,
         ax=ax,
