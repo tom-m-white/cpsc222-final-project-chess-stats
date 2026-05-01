@@ -1,8 +1,15 @@
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
+from scipy.stats import norm
+import numpy as np
+
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import accuracy_score, classification_report
 
 
 RAW_DATA_FILENAME = "imsogarb69_all_2604212016.csv"
@@ -15,7 +22,7 @@ CATEGORICAL_FEATURES = ["timeClass","userColor","opponent_strength_bucket","week
 TIME_CONTROLS = ("blitz", "rapid", "bullet")
 DRAW_RESULTS = {"agreed", "stalemate", "insufficient", "repetition", "timevsinsufficient"}
 DEFAULT_OPENING_MIN_GAMES = 8
-DEFAULT_RANDOM_STATE = 222
+DEFAULT_RANDOM_STATE = 16
 
 def load_data():
     parse_date_columns = ["date", "week_start"]
@@ -232,10 +239,6 @@ def weakest_openings(games, color):
     opening_summary = opening_summary.sort_values(["win_rate", "games"], ascending=[True, False]).reset_index(drop=True)
     return opening_summary
 
-import pandas as pd
-import numpy as np
-from scipy.stats import norm
-
 def run_hypothesis_test(df):
     if df.empty:
         return pd.DataFrame()
@@ -278,3 +281,211 @@ def run_hypothesis_test(df):
         "p_value": p_value,
         "significant_at_0_05": p_value < 0.05
     }])
+
+def plot_win_rate_by_time_control(games):
+    summary = games.groupby("timeClass")["is_win"].mean().reset_index()
+    _, ax = plt.subplots()
+    sns.barplot(
+        data=summary,
+        x="timeClass",
+        y="is_win",
+        ax=ax,
+    )
+    ax.set_title("Win Rate by Time Control")
+    ax.set_xlabel("Time Control")
+    ax.set_xticks(range(len(summary["timeClass"])))
+    ax.set_xticklabels(summary["timeClass"], rotation=35, ha="right")
+    ax.set_ylabel("Win Rate")
+    plt.tight_layout()
+    return ax
+
+def plot_win_rate_by_color(games):
+    summary = games.groupby("userColor")["is_win"].mean().reset_index()
+    _, ax = plt.subplots()
+    sns.barplot(
+        data=summary,
+        x="userColor",
+        y="is_win",
+        ax=ax,
+    )
+    ax.set_title("Win Rate by Color")
+    ax.set_xlabel("Color")
+    ax.set_xticks(range(len(summary["userColor"])))
+    ax.set_xticklabels(summary["userColor"], rotation=35, ha="right")
+    ax.set_ylabel("Win Rate")
+    plt.tight_layout()
+    return ax
+
+
+def plot_win_rate_by_opponent_strength(games):
+    summary = games.groupby("opponent_strength_bucket")["is_win"].mean().reset_index()
+    order = [
+        "opponent_100_plus_higher",
+        "opponent_slightly_higher",
+        "same_rating",
+        "opponent_slightly_lower",
+        "opponent_100_plus_lower",
+    ]
+    _, ax = plt.subplots()
+    sns.barplot(
+        data=summary,
+        x="opponent_strength_bucket",
+        y="is_win",
+        order=order,
+        ax=ax,
+    )
+    ax.set_title("Win Rate by Opponent Strength Bucket")
+    ax.set_xlabel("Opponent Strength Bucket")
+    ax.set_xticks(range(len(order)))
+    ax.set_xticklabels(order, rotation=35, ha="right")
+    ax.set_ylabel("Win Rate")
+    plt.tight_layout()
+    return ax
+
+def plot_win_rate_by_time_of_day(games):
+    summary = games.groupby("hour_bucket_et")["is_win"].mean().reset_index()
+    order = ["late_night", "morning", "afternoon", "evening"]
+    _, ax = plt.subplots()
+    sns.barplot(
+        data=summary,
+        x="hour_bucket_et",
+        y="is_win",
+        order=order,
+        ax=ax,
+    )
+    ax.set_title("Win Rate by Time of Day (ET)")
+    ax.set_xlabel("Time of Day")
+    ax.set_xticks(range(len(order)))
+    ax.set_xticklabels(order, rotation=35, ha="right")
+    ax.set_ylabel("Win Rate")
+    plt.tight_layout()
+    return ax
+
+def plot_class_distribution(games):
+    class_counts = games["result_group"].value_counts().reset_index() 
+    class_counts.columns = ["outcome", "number_of_games"]
+
+    class_counts = class_counts[class_counts["outcome"].isin(["win", "loss"])]
+    _, ax = plt.subplots()
+    sns.barplot(
+        data=class_counts,
+        x="outcome",
+        y="number_of_games",
+        ax=ax,
+    )
+    ax.set_title("Class Distribution")
+    ax.set_xlabel("Outcome")
+    ax.set_ylabel("Count")
+    plt.tight_layout()
+    return ax
+
+# Helper: prepare data for classification. Converts categorical features to dummy variables.
+def _prepare_classification_data(games):
+    clf_data = games[games["result_group"].isin(["win", "loss"])].copy()
+    clf_data["target"] = (clf_data["result_group"] == "win").astype(int)
+
+    label_encoders = {}
+    for col in CATEGORICAL_FEATURES:
+        le = LabelEncoder()
+        clf_data[col] = le.fit_transform(clf_data[col].astype(str))
+        label_encoders[col] = le
+
+    feature_cols = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+    X = clf_data[feature_cols].values
+    y = clf_data["target"].values
+    return X, y, feature_cols
+
+
+def class_label_distribution(games):
+    subset = games[games["result_group"].isin(["win", "loss"])]
+    counts = subset["result_group"].value_counts()
+    pcts = subset["result_group"].value_counts(normalize=True).round(4) * 100
+    dist = pd.DataFrame({"count": counts, "percent": pcts})
+    print("Class Label Distribution (win vs loss, draws excluded):")
+    print(dist)
+    print()
+    return dist
+
+
+def run_knn_classifier(games, k=5):
+    X, y, feature_cols = _prepare_classification_data(games)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.25, random_state=DEFAULT_RANDOM_STATE
+    )
+
+    knn = KNeighborsClassifier(n_neighbors=k)
+    knn.fit(X_train, y_train)
+    y_pred = knn.predict(X_test)
+
+    acc = accuracy_score(y_test, y_pred)
+    report = classification_report(
+        y_test, y_pred, target_names=["loss", "win"], output_dict=True
+    )
+    report_df = pd.DataFrame(report).transpose()
+
+    print(f"kNN Classifier (neighbors={k})")
+    print(f"  Accuracy: {acc:.4f}")
+    return {"accuracy": acc, "report": report_df, "y_test": y_test, "y_pred": y_pred}
+
+
+def run_decision_tree_classifier(games, max_depth=10):
+    X, y, feature_cols = _prepare_classification_data(games)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.25, random_state=DEFAULT_RANDOM_STATE
+    )
+
+    dt = DecisionTreeClassifier(max_depth=max_depth, random_state=DEFAULT_RANDOM_STATE)
+    dt.fit(X_train, y_train)
+    y_pred = dt.predict(X_test)
+
+    acc = accuracy_score(y_test, y_pred)
+    report = classification_report(
+        y_test, y_pred, target_names=["loss", "win"], output_dict=True
+    )
+    report_df = pd.DataFrame(report).transpose()
+
+    importances = pd.DataFrame(
+        {"feature": feature_cols, "importance": dt.feature_importances_}
+    ).sort_values("importance", ascending=False)
+
+    print(f"Decision Tree Classifier (max_depth={max_depth})")
+    print(f"  Accuracy: {acc:.4f}")
+    return {"accuracy": acc, "report": report_df, "importances": importances,
+            "model": dt, "feature_cols": feature_cols,
+            "y_test": y_test, "y_pred": y_pred}
+
+
+def plot_classifier_comparison(knn_results, dt_results):
+    data = pd.DataFrame(
+        {
+            "classifier": ["kNN", "Decision Tree"],
+            "accuracy": [knn_results["accuracy"], dt_results["accuracy"]],
+        }
+    )
+    _, ax = plt.subplots()
+    sns.barplot(data=data, x="classifier", y="accuracy", ax=ax)
+    ax.set_title("Classifier Accuracy Comparison")
+    ax.set_xlabel("Classifier")
+    ax.set_ylabel("Accuracy")
+    ax.set_ylim(0, 1)
+    plt.tight_layout()
+    return ax
+
+def plot_decision_tree(dt_results, max_depth_display=3):
+    dt = dt_results["model"]
+    feature_cols = dt_results["feature_cols"]
+
+    fig, ax = plt.subplots(figsize=(20, 10))
+    plot_tree(
+        dt,
+        feature_names=feature_cols,
+        class_names=["loss", "win"],
+        filled=True,
+        rounded=True,
+        max_depth=max_depth_display,
+        fontsize=8,
+        ax=ax,
+    )
+    ax.set_title("Decision Tree (first 3 levels)")
+    plt.tight_layout()
+    return ax
