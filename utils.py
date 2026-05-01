@@ -16,7 +16,6 @@ RAW_DATA_FILENAME = "imsogarb69_all_2604212016.csv"
 GAMES_FILENAME = "games_clean.csv"
 CALENDAR_FILENAME = "calendar_table.csv"
 DAILY_SUMMARY_FILENAME = "daily_summary.csv"
-MODEL_FEATURES = ["timeClass", "userColor", "userRating", "opponentRating", "rating_diff", "opponent_strength_bucket", "weekday", "hour_bucket_et", "opening_family", "games_played_so_far_today"]
 NUMERIC_FEATURES = ["userRating", "opponentRating", "rating_diff", "games_played_so_far_today"]
 CATEGORICAL_FEATURES = ["timeClass","userColor","opponent_strength_bucket","weekday","hour_bucket_et","opening_family"]
 TIME_CONTROLS = ("blitz", "rapid", "bullet")
