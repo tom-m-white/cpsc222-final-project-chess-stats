@@ -1,0 +1,8 @@
+.venv/
+.venv_uv/
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+*.pyo
+*.pyd
+project_report.executed.ipynb
